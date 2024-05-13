@@ -1,106 +1,106 @@
 from PIL import Image
 import os
 import numpy as np
-import cv2
-
-def resize_image(image_path, output_size=(224, 224)):
-    with Image.open(image_path) as img:
-        img = img.resize(output_size, Image.ANTIALIAS)
-        return img
-    
-
-# Load and append all test and train images
-def load_images(data_dir):
-    images = []
-    for img_name in os.listdir(data_dir):
-        img_path = os.path.join(data_dir, img_name)
-        img = Image.open(img_path)
-        images.append(img)
-    return images
-
-# All Gray Scale Imgs are in ../data/train_black and ../data/test_black
-train_gray_scale_images = load_images('../data/train_black')
-test_gray_scale_images = load_images('../data/test_black')
-
-# All RGB Imgs are in ../data/train_color and ../data/test_color
-train_rgb_images = load_images('../data/train_color')
-test_rgb_images = load_images('../data/test_color')
-
-
-# Histogram Equalization for Gray Scale Images
-def histogram_equalization_3channel(img):
-    if isinstance(img, str):
-        # Load the image if img is a path
-        img = cv2.imread(img)
-        # Convert the image from BGR to RGB
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    elif not isinstance(img, np.ndarray):
-        raise TypeError("Input must be a NumPy array or a path to an image file.")
-
-    # Check if the image is indeed in a three-channel format
-    if img.shape[2] != 3:
-        raise ValueError("Image does not have three channels.")
-    
-    # Since the image is grayscale but in three channels, just take one channel for processing
-    gray_channel = img[:, :, 0]
-    
-    # Apply histogram equalization
-    equalized_channel = cv2.equalizeHist(gray_channel)
-    
-    # Replicate the equalized channel across all three channels
-    equalized_image = np.stack([equalized_channel] * 3, axis=-1)
-    
-    # Convert the image back to BGR from RGB
-    equalized_image = cv2.cvtColor(equalized_image, cv2.COLOR_RGB2BGR)
-    
-    return equalized_image
 
 # Block Truncation Coding for Gray Scale Images
-
 def BTC(img, block_size):
     if isinstance(img, str):
         # Load the image if img is a path
-        img = cv2.imread(img, 0)
+        img = Image.open(img)
+        img = np.array(img)
+    elif isinstance(img, Image.Image):
+        img = np.array(img)
     elif not isinstance(img, np.ndarray):
         raise TypeError("Input must be a NumPy array or a path to an image file.")
     
-    rows, cols = img.shape
+    try:
+        block_size = abs(int(block_size))
+    except:
+        block_size = 1
+    
+    if block_size < 2:
+        return img
+    
+    rows, cols = 0,0
+    if len(img.shape) == 3:
+        rows, cols = img.shape[:2]
+        img = img[:, :, 0]
+    else:
+        rows, cols = img.shape
     I_new = np.zeros((rows, cols), dtype=np.uint8)
     
     for i in range(rows // block_size):
         for j in range(cols // block_size):
             # get block
             row_start = block_size * i
-            if row_start >= rows:
-                break
             col_start = block_size * j
-            if col_start >= cols:
-                break
-            subgrid = img[row_start:min(row_start + block_size, rows), col_start:min(col_start + block_size, cols)]
+            subgrid = img[row_start:row_start + block_size, col_start:col_start + block_size]
 
             subgrid = subgrid.astype(float)  # so that subtraction isn't bounded
 
             avg_intensity = np.sum(subgrid) / (block_size ** 2)
-            standard_dev = np.sqrt(np.sum((subgrid - avg_intensity) ** 2) / (block_size ** 2))
+            
+            standard_dev = 0
+            for u in range(block_size):
+                for v in range(block_size):
+                    standard_dev += (subgrid[u, v] - avg_intensity) ** 2
+                    
+            standard_dev = np.sqrt(standard_dev / (block_size ** 2))
 
-            binary_block = np.uint8(subgrid >= avg_intensity)
-
+            binary_block = subgrid >= avg_intensity
             # Decode
             Q = np.sum(binary_block)
             P = (block_size ** 2) - Q
             if P != 0:
                 A = np.sqrt(Q / P)
-                subgrid[binary_block == 1] = avg_intensity + (standard_dev / A)
-                subgrid[binary_block == 0] = avg_intensity - (standard_dev * A)
-            else:
-                subgrid[binary_block == 1] = avg_intensity
-                subgrid[binary_block == 0] = avg_intensity
-            if len(set(list(subgrid.reshape(block_size ** 2)))) > 2:
-                print(subgrid)
+                if A != 0:  # Add check to avoid division by zero
+                    subgrid[binary_block == True] = avg_intensity + (standard_dev / A)
+                    subgrid[binary_block == False] = avg_intensity - (standard_dev * A)
+                else:
+                    subgrid[binary_block == True] = avg_intensity
+                    subgrid[binary_block == False] = avg_intensity
+
+
             # Append to output image
-            I_new[row_start:min(row_start + block_size, rows), col_start:min(col_start + block_size, cols)] = subgrid.astype(np.uint8)
+            I_new[row_start:row_start + block_size, col_start:col_start + block_size] = subgrid.astype(np.uint8)
     
-    # Duplicate the gray channel 3 times to produce an RGB image
-    I_new = np.stack([I_new] * 3, axis=-1)
+    # # Duplicate the gray channel if it's single-channel to produce an RGB image
+    if len(img.shape) == 2:
+        I_new = np.stack([I_new] * 3, axis=-1)
+    
+    # # Make a 3-D, 1-channel to make a grayscale image that's shape size 3
+    # if len(img.shape) == 2:
+    #     I_new = np.expand_dims(img,axis=-1)
     
     return I_new
+
+def BTC_directories(blocks=[1, 2, 4, 8, 16]):
+    # Define the paths
+    data_folder = "../data/train_black"
+    for block in blocks:
+        counter = 0
+        output_folder = f"../data_btc_{block}"
+        if os.path.exists(output_folder):
+            print(f"Output folder for block size {block} already exists. Skipping data BTC preprocessing...")
+            continue
+        # Iterate through the subfolders
+        for root, dirs, files in os.walk(data_folder):
+            # create the corresponding subfolder in the output directory
+            output_subfolder = os.path.join(output_folder, os.path.relpath(root, data_folder))
+            os.makedirs(output_subfolder, exist_ok=True)
+
+            # Iterate through the files in the current subfolder
+            for file in files:
+                # Check if the file is a jpg file
+                if file.lower().endswith(".jpg"):
+                    # making the input and output file paths
+                    input_file = os.path.join(root, file)
+                    output_file = os.path.join(output_subfolder, file.replace(".jpg", ".png"))
+
+                    # apply BTC function and save the converted image
+                    Image.fromarray(BTC(input_file, block)).convert('RGB').save(output_file)
+                    
+                    # progress indicator
+                    counter += 1
+                    if counter % 50 == 0:
+                        print(f"Processed {counter} images with block size {block}")
