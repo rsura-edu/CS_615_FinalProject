@@ -13,7 +13,7 @@ We will be exploring an ML colorization model with different BTC block size prep
 - `sklearn` (sci-kit learn)
 
 ## Running on Linux Environment (with good hardware)
-- `python3 model_build.py`
+- `python3 src/model_build.py`
     - If you would like to modify the blocksize of the BTC, change the hyperparameter at the beginning of the file
 
 ## References
