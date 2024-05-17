@@ -5,27 +5,29 @@ import numpy as np
 # Block Truncation Coding for Gray Scale Images
 def BTC(img, block_size):
     if isinstance(img, str):
-        # Load the image if img is a path
+        # loading image if img is a path
         img = Image.open(img)
         img = np.array(img)
     elif isinstance(img, Image.Image):
+        # converting image to np.ndarray if img is an Image object
         img = np.array(img)
     elif not isinstance(img, np.ndarray):
+        # raise error if img is not a NumPy array, PIL image file, or path to an image file
         raise TypeError("Input must be a NumPy array or a path to an image file.")
     
-    try:
+    try: # error handling of parameter block_size
         block_size = abs(int(block_size))
     except:
         block_size = 1
     
-    if block_size < 2:
+    if block_size < 2: # block size of 1 or 0 is meaningless
         return img
     
     rows, cols = 0,0
-    if len(img.shape) == 3:
+    if len(img.shape) == 3: # if image is RGB, convert to grayscale
         rows, cols = img.shape[:2]
         img = img[:, :, 0]
-    else:
+    else: # if image is already grayscale
         rows, cols = img.shape
     I_new = np.zeros((rows, cols), dtype=np.uint8)
     
@@ -34,10 +36,12 @@ def BTC(img, block_size):
             # get block
             row_start = block_size * i
             col_start = block_size * j
+            # acquire block
             subgrid = img[row_start:row_start + block_size, col_start:col_start + block_size]
 
             subgrid = subgrid.astype(float)  # so that subtraction isn't bounded
 
+            # calculate average intensity and standard deviation
             avg_intensity = np.sum(subgrid) / (block_size ** 2)
             
             standard_dev = 0
@@ -51,9 +55,9 @@ def BTC(img, block_size):
             # Decode
             Q = np.sum(binary_block)
             P = (block_size ** 2) - Q
-            if P != 0:
+            if P != 0: # add check to avoid division by zero
                 A = np.sqrt(Q / P)
-                if A != 0:  # Add check to avoid division by zero
+                if A != 0:
                     subgrid[binary_block == True] = avg_intensity + (standard_dev / A)
                     subgrid[binary_block == False] = avg_intensity - (standard_dev * A)
                 else:
@@ -61,21 +65,21 @@ def BTC(img, block_size):
                     subgrid[binary_block == False] = avg_intensity
 
 
-            # Append to output image
+            # append to output image
             I_new[row_start:row_start + block_size, col_start:col_start + block_size] = subgrid.astype(np.uint8)
     
-    # # Duplicate the gray channel if it's single-channel to produce an RGB image
+    # Duplicate the gray channel if it's single-channel to produce an RGB image
     if len(img.shape) == 2:
         I_new = np.stack([I_new] * 3, axis=-1)
     
-    # # Make a 3-D, 1-channel to make a grayscale image that's shape size 3
+    # # Make a 3-D, 1-channel to make a grayscale image that's shape size 3 (Unused for our model)
     # if len(img.shape) == 2:
     #     I_new = np.expand_dims(img,axis=-1)
     
     return I_new
 
 def BTC_directories(blocks=[1, 2, 4, 8, 16]):
-    # Define the paths
+    # define the paths
     data_folder = "../data/train_black"
     for block in blocks:
         counter = 0
@@ -83,7 +87,7 @@ def BTC_directories(blocks=[1, 2, 4, 8, 16]):
         if os.path.exists(output_folder):
             print(f"Output folder for block size {block} already exists. Skipping data BTC preprocessing...")
             continue
-        # Iterate through the subfolders
+        # iterate through the subfolders
         for root, dirs, files in os.walk(data_folder):
             # create the corresponding subfolder in the output directory
             output_subfolder = os.path.join(output_folder, os.path.relpath(root, data_folder))
@@ -91,7 +95,7 @@ def BTC_directories(blocks=[1, 2, 4, 8, 16]):
 
             # Iterate through the files in the current subfolder
             for file in files:
-                # Check if the file is a jpg file
+                # file extension check
                 if file.lower().endswith(".jpg"):
                     # making the input and output file paths
                     input_file = os.path.join(root, file)

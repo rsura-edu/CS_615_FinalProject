@@ -8,8 +8,10 @@ from modules import *
 block_size = 16
 #----------------------------------------------------------------------
 
+# Creates the BTC directories only if they don't exist. This ensures preprocessing is only done once
 BTC_directories([block_size])
 
+# metrics to make sure model is running smoothly
 Input,Output=load_data('../data/train_color', f'../data_btc_{block_size}')
 
 print('Input shape is ' , Input.shape)
@@ -25,6 +27,7 @@ print('X_test shape is ' , X_test.shape)
 print('y_train shape is ' , y_train.shape)
 print('y_test shape is ' , y_test.shape)
 
+# build the model, compile it, and train
 autoencoder = build_colorization_model()
 autoencoder.summary()
 
@@ -34,8 +37,8 @@ hist=autoencoder.fit(X_train,y_train,epochs=100,validation_split=.1,callbacks=[c
 
 print(autoencoder.evaluate(X_test,y_test))
 predictions = autoencoder.predict(X_test)
-predictions.shape
 
+# Display the results in a `n` image comparison plot (can be changed)
 n = 10
 plt.figure(figsize=(35, 25))
 for i in range(n):

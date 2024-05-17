@@ -1,3 +1,5 @@
+# all necessary imports
+
 import os 
 import numpy as np
 from tqdm import tqdm
@@ -15,6 +17,7 @@ from skimage.metrics import peak_signal_noise_ratio
 
 from preprocess import *
 
+# model architecture
 def build_colorization_model(input_shape=(256,256,1)):
     input_ = keras.layers.Input(shape=input_shape)
     # Encoder
@@ -42,7 +45,6 @@ def build_colorization_model(input_shape=(256,256,1)):
     
     return model
 
-# Modify the load_data function to return the correct shape for the input data
 def load_data(color_path, btc_path, num_images=5000):
     Input, Output=[],[]
     for i in tqdm(sorted(os.listdir(color_path))):
@@ -50,18 +52,22 @@ def load_data(color_path, btc_path, num_images=5000):
             btc_path_ = os.path.join(btc_path,i.replace('.jpg', '.png'))
         else:
             btc_path_ = os.path.join(btc_path,i)
+            
+        # get inputs
         input_image = load_img(btc_path_,target_size=(256,256),color_mode='rgb')
         input_image=img_to_array(input_image)
         input_image=input_image/255.0
         lab=rgb2lab(input_image)
         Input.append(lab[:,:,0])
         
+        # get outputs
         color_path_ = os.path.join(color_path,i)
         output_image = load_img(color_path_,target_size=(256,256),color_mode='rgb')
         output_image = img_to_array(output_image)
         output_image = output_image/255.0
         lab = rgb2lab(output_image)
         Output.append(lab[:,:,1:]/128)
+    # return list of inputs and outputs
     return np.array(Input), np.array(Output)
 
 def evaluate_model(model, X, y):
@@ -69,6 +75,7 @@ def evaluate_model(model, X, y):
     print('Evaluation Loss:', eval_loss)
     print('Evaluation Accuracy:', eval_accuracy)
 
+# printing figures into a file
 def visualize_results(X, y, predictions, n, block_size):
     if not os.path.exists(f'../results/'):
         os.makedirs(f'../results/')
@@ -76,14 +83,14 @@ def visualize_results(X, y, predictions, n, block_size):
     plt.figure()
     extension_length = len(str(n))
     for i in range(n):
-        # Display original gray images
+        # display original gray images
         ax = plt.subplot(1, 3, 1)
         plt.imshow(X[i],cmap='gray')
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)
         ax.set_title('Original Gray')
         
-        # Display original color images
+        # display original color images
         ax = plt.subplot(1, 3, 2)
         image = np.zeros((256, 256, 3))
         image[:, :, 0] = X[i][:,:,0]
@@ -93,7 +100,7 @@ def visualize_results(X, y, predictions, n, block_size):
         ax.get_yaxis().set_visible(False)
         ax.set_title('Original Color')
         
-        # Display pred images (colorized form)
+        # display pred images (colorized form)
         ax = plt.subplot(1, 3, 3)
         image = np.zeros((256, 256, 3))
         image[:, :, 0] = X[i][:,:,0]
@@ -120,6 +127,7 @@ def train_model(block_size=1):
     # print("Input shape:", Input.shape)
     X_train, X_test, y_train, y_test = train_test_split(Input, Output, test_size=0.2, random_state=314, shuffle=False)
     
+    # train if not trained yet
     autoencoder : object
     model_fp = f"autoencoder_btc_{block_size}.h5"
     try:
@@ -147,7 +155,7 @@ def train_model(block_size=1):
     print('Statistics on model trained on BTC with block size:', block_size)
     # evaluate_model(autoencoder, X_train, y_train)
     
-    
+    # ask for visualization
     visualize = input('Visualize the model? (y/n)')
     visualize = True if 'y' in visualize.lower() else False
     
